@@ -79,6 +79,9 @@ public class ArchiveCrawler {
 					// existing file
 					while (Files.exists(outputDir.resolve(outputFilename))) {
 						int pointPosition = file.filename.lastIndexOf(".");
+						if (pointPosition == -1) {
+							pointPosition = file.filename.length();
+						}
 						outputFilename = new StringBuffer(file.filename).insert(pointPosition, "_" + ++counter)
 								.toString();
 					}
