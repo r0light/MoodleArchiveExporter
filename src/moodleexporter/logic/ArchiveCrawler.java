@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -88,8 +89,11 @@ public class ArchiveCrawler {
 					Files.copy(foundFile, outputDir.resolve(outputFilename));
 				}
 			}
+		} catch (InvalidPathException e) {
+			throw new MoodleExporterException(
+					"Error while reading a file; the filename was bad." + System.lineSeparator() + e.getMessage(), e);
 		} catch (IOException e) {
-			throw new MoodleExporterException("Error while accessing the archive file");
+			throw new MoodleExporterException("Error while accessing the archive file.", e);
 		}
 	}
 
