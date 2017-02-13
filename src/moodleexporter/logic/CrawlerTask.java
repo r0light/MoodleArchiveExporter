@@ -1,7 +1,6 @@
 package moodleexporter.logic;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -9,70 +8,61 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
 
-import javafx.beans.property.SimpleStringProperty;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Alert.AlertType;
+import javafx.concurrent.Task;
 import moodleexporter.filesmodel.MoodleFile;
 import moodleexporter.filesmodel.MoodleFiles;
-import moodleexporter.view.PickerView;
 
-public class ArchiveCrawler {
+public class CrawlerTask extends Task<Boolean> {
 
-	private final String DIRECTORY_NAME = "Dateien";
-	private JAXBContext context;
-	private PickerView view;
-	private SimpleStringProperty archivePath = new SimpleStringProperty();
+	private final String archivePath;
+	private final String directoryName;
+	private final JAXBContext context;
 
-	public ArchiveCrawler() {
-		try {
-			this.context = JAXBContext.newInstance(MoodleFiles.class);
-			this.view = new PickerView(this);
-			this.view.getInputField().textProperty().bindBidirectional(archivePath);
-			this.view.show();
-		} catch (JAXBException e) {
-			System.err.println("Error: JAXB context could not be initialized");
-		}
+	public CrawlerTask(String archivePath, String directoryName, JAXBContext context) {
+		super();
+		this.archivePath = archivePath;
+		this.directoryName = directoryName;
+		this.context = context;
 	}
 
-	public void setArchivePath(File archive) {
-		if (archive != null) {
-			this.archivePath.set(archive.getPath());
-		}
-	}
-
-	public void startExport() {
-		try {
-			this.view.blockUI(true);
-			exportFiles();
-			Alert alert = new Alert(AlertType.INFORMATION, "The export finished successfully");
-			alert.setHeaderText("Success");
-			alert.showAndWait();
-		} catch (MoodleExporterException e) {
-			Alert alert = new Alert(AlertType.ERROR, e.getMessage());
-			alert.setHeaderText("Error");
-			alert.showAndWait();
-		} finally {
-			this.view.blockUI(false);
-		}
+	@Override
+	protected Boolean call() throws MoodleExporterException {
+		exportFiles();
+		return true;
 	}
 
 	public void exportFiles() throws MoodleExporterException {
-		Path archive = checkArchivePath(getArchivePath());
+		Path archive = checkArchivePath(archivePath);
 		Path outputDir = createDirectoryForOutput(archive.getParent());
+		List<String> errors = new LinkedList<String>();
 		try (FileSystem archiveFileSystem = FileSystems.newFileSystem(archive, null)) {
-			// look for file "files.xml" which is a mapping file for all files
-			Path filesData = archiveFileSystem.getPath("files.xml");
 
-			List<MoodleFile> filesToExport = readFileEntries(filesData);
-			for (MoodleFile file : filesToExport) {
-				// ignore files with filename .
+			// check if a file is a correct file, there are entries with only a
+			// dot in the files.xml which represent other stuff
+			Predicate<MoodleFile> isCorrectFile = file -> {
 				if (!".".equals(file.filename)) {
+					return true;
+				}
+				return false;
+			};
+
+			// processes a MoodleFile and returns a String which is empty, if
+			// the processing was successful or otherwise contains the error
+			// message
+			Function<MoodleFile, Boolean> exportFile = file -> {
+				try {
+					// ignore files with filename .
+
 					Path foundFile = locateFile(archiveFileSystem.getPath("files/"), file.contenthash);
 					String outputFilename = file.filename;
 					int counter = 1;
@@ -87,18 +77,37 @@ public class ArchiveCrawler {
 								.toString();
 					}
 					Files.copy(foundFile, outputDir.resolve(outputFilename));
+					return true;
+				} catch (MoodleExporterException | IOException e) {
+					// save error message and return false
+					errors.add(e.getMessage());
+					return false;
 				}
+			};
+
+			// look for file "files.xml" which is a mapping file for all files
+			// and read all file entries in a list
+			Path filesData = archiveFileSystem.getPath("files.xml");
+			List<MoodleFile> filesToExport = readFileEntries(filesData);
+
+			// start a stream of this list and export the files
+			Optional<Boolean> success = filesToExport.stream().parallel().filter(isCorrectFile).map(exportFile)
+					.reduce((b1, b2) -> {
+						return b1 && b2;
+					});
+
+			// if any export failed the Boolean in the Optional is false and the
+			// error(s) should be reported
+			if (success.isPresent() && !success.get()) {
+				throw new MoodleExporterException("Error(s) while exporting the files: " + errors.toString());
 			}
+
 		} catch (InvalidPathException e) {
 			throw new MoodleExporterException(
 					"Error while reading a file; the filename was bad." + System.lineSeparator() + e.getMessage(), e);
 		} catch (IOException e) {
 			throw new MoodleExporterException("Error while accessing the archive file.", e);
 		}
-	}
-
-	private String getArchivePath() {
-		return archivePath.get();
 	}
 
 	private Path checkArchivePath(String archivePath) throws MoodleExporterException {
@@ -113,7 +122,7 @@ public class ArchiveCrawler {
 	}
 
 	private Path createDirectoryForOutput(Path parent) {
-		Path outputDir = parent.resolve(DIRECTORY_NAME);
+		Path outputDir = parent.resolve(directoryName);
 		try {
 			Files.createDirectories(outputDir);
 		} catch (IOException e) {

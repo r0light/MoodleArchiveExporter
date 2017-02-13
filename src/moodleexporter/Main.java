@@ -2,7 +2,7 @@ package moodleexporter;
 
 import javafx.application.Application;
 import javafx.stage.Stage;
-import moodleexporter.logic.ArchiveCrawler;
+import moodleexporter.logic.CrawlerController;
 
 public class Main extends Application {
 
@@ -12,7 +12,7 @@ public class Main extends Application {
 
 	@Override
 	public void start(Stage primaryStage) throws Exception {
-		new ArchiveCrawler();
+		new CrawlerController();
 	}
 
 }

@@ -12,17 +12,17 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import moodleexporter.logic.ArchiveCrawler;
+import moodleexporter.logic.CrawlerController;
 
 public class PickerView extends Stage {
 
-	private final ArchiveCrawler crawler;
+	private final CrawlerController crawler;
 	private BorderPane rootPane;
 	private TextField archiveInput;
 	private Button chooseArchive;
 	private Button start;
 
-	public PickerView(ArchiveCrawler crawler) {
+	public PickerView(CrawlerController crawler) {
 		super();
 		this.crawler = crawler;
 		this.setTitle("Moodle Archive File Exporter");
