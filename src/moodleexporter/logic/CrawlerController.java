@@ -20,7 +20,7 @@ import moodleexporter.view.PickerView;
 
 public class CrawlerController {
 
-	private final ExecutorService executorService = Executors.newFixedThreadPool(1);
+	private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 	private final String DIRECTORY_NAME = "Dateien";
 	private JAXBContext context;
 	private PickerView view;
